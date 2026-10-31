@@ -1,0 +1,13 @@
+{
+  "name": "strat-traffic-live",
+  "version": "4.1.0",
+  "description": "Real-Time Open-Source Geo-Traffic, Strategic Infrastructure, Telecom & News Correlation Viewer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

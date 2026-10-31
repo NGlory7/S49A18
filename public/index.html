@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STRAT-TRAFFIC v3.0 LIVE // Tam Şehir Canlı Trafik Anomali, Gündem &amp; Lojman Sistemi</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- ÜST KONTROL VE DURUM ÇUBUĞU (100% LIVE) -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-pulse"></div>
+      <div>
+        <h1>STRAT-TRAFFIC <span class="badge-osint">v3.0 REAL-TIME LIVE</span></h1>
+        <p>Tam Şehir Canlı OSM Keşfi • Saatlik Baz Karşılaştırmalı Yol Kapatma &amp; Anomali • Çok Dilli Gündem &amp; Lojman Tespiti</p>
+      </div>
+    </div>
+
+    <div class="controls-bar">
+      <div class="control-group">
+        <label for="countrySelect">Aktif Hedef Ülke (İsrail &amp; İran)</label>
+        <select id="countrySelect"></select>
+      </div>
+
+      <div class="control-group">
+        <label for="citySelect">Kapsam (Ülke Geneli veya Bölge Odaklama)</label>
+        <select id="citySelect"></select>
+      </div>
+
+      <div class="control-group search-group">
+        <label for="citySearchInput">İsrail &amp; İran İçinde Şehir / Bölge Ara (עברית / فارسی / EN)</label>
+        <div class="input-row">
+          <input type="text" id="citySearchInput" dir="auto" placeholder="Örn: תל אביב, ירושלים, חיפה, تهران, اصفهان, تبریز..." />
+          <button id="btnSearchCity" class="btn-secondary">Canlı Tara</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Gerçek Zamanlı Sistem Saati</label>
+        <div id="liveClockBox" style="background:rgba(16,185,129,0.14); border:1px solid rgba(16,185,129,0.45); color:#6ee7b7; padding:5px 11px; border-radius:6px; font-size:0.78rem; font-weight:700;">
+          🟢 CANLI • <span id="liveClockText">--:--:--</span>
+        </div>
+      </div>
+
+      <div class="control-actions">
+        <button id="btnLiveStream" class="btn-live active" title="Her 25 saniyede bir şehirdeki tüm noktaları ve canlı haber akışını otomatik yeniler">
+          📡 Oto-Tarama: AÇIK
+        </button>
+        <button id="btnPickMap" class="btn-map-pick" title="Haritada istediğiniz şehre/bölgeye tıklayarak o bölgedeki tüm kurum ve lojmanları canlı tarayın">
+          🎯 Haritadan Seç
+        </button>
+        <button id="btnApiModal" class="btn-secondary" title="TomTom Canlı Trafik API anahtarı ayarları">
+          ⚙️ API
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ÖZET METRİK ŞERİDİ -->
+  <section class="kpi-strip">
+    <div class="kpi-card">
+      <span class="kpi-label">Canlı Taranan Şehir &amp; Saat</span>
+      <strong id="kpiRegionName">Yükleniyor...</strong>
+      <small id="kpiSourceMode">Tam Şehir Canlı OSM Taraması</small>
+    </div>
+    <div class="kpi-card kpi-alert">
+      <span class="kpi-label">Canlı Anomali &amp; Yol Kapaması</span>
+      <strong id="kpiCriticalCount">0</strong>
+      <small id="kpiMaxZScore">Baz Dışı Yol Kapaması: 0 Nokta</small>
+    </div>
+    <div class="kpi-card kpi-agenda">
+      <span class="kpi-label">Günün Potansiyel Gündemi (Canlı RSS)</span>
+      <strong id="kpiAgendaTop">Yükleniyor...</strong>
+      <small id="kpiAgendaStatus">Çok Dilli Canlı Haber &amp; Diplomatik Akış</small>
+    </div>
+    <div class="kpi-card kpi-housing">
+      <span class="kpi-label">Şehirde Keşfedilen Lojman / Mahalle</span>
+      <strong id="kpiHousingCount">0</strong>
+      <small>Aktif Personel / Konvoy Koridoru: <span id="kpiCorridorCount">0</span></small>
+    </div>
+  </section>
+
+  <!-- ANA 3 SÜTUNLU İSTİHBARAT EKRANI -->
+  <main class="dashboard-grid">
+    <!-- SOL PANEL: CANLI YOL KAPATMA BİLDİRİMLERİ + GÜNLÜK GÖRÜŞME / GÜNDEM AKIŞI + TÜM ŞEHİR POI LİSTESİ -->
+    <aside class="panel left-panel">
+      <!-- 1. Canlı VIP Yol Kapatma ve Anomali Bildirimleri -->
+      <div class="panel-section">
+        <div class="section-header">
+          <h2>🚨 Canlı Yol Kapatma &amp; Anomali Bildirimleri</h2>
+          <span id="alertBadgeCount" class="count-pill pill-red">0</span>
+        </div>
+        <div id="alertsContainer" class="alerts-list"></div>
+      </div>
+
+      <!-- 1.5. Canlı Askeri Uçuş & VIP Devlet Uçağı (ADS-B) Bildirimleri (Saat Aralıklı) -->
+      <div class="panel-section">
+        <div class="section-header">
+          <h2>🦅 Canlı Askeri Uçuş &amp; ADS-B Bildirimleri</h2>
+          <span id="flightAlertBadgeCount" class="count-pill pill-purple">0</span>
+        </div>
+        <div id="flightAlertsContainer" class="alerts-list"></div>
+      </div>
+
+      <!-- 2. O Günkü Görüşmeler ve Potansiyel Gündem İstihbaratı -->
+      <div class="panel-section agenda-section">
+        <div class="section-header">
+          <h2>📅 O Günkü Görüşmeler &amp; Potansiyel Gündem</h2>
+          <span id="agendaFeedBadge" class="count-pill pill-amber">CANLI RSS</span>
+        </div>
+        <div id="agendaBriefBox" class="agenda-brief-box"></div>
+        <div id="agendaListContainer" class="agenda-list"></div>
+      </div>
+
+      <!-- 3. Ülke Genelinde Keşfedilen Tüm Stratejik Noktalar -->
+      <div class="panel-section poi-section">
+        <div class="section-header">
+          <h2>🏛️ Ülke Geneli Stratejik &amp; Telekom Noktaları</h2>
+          <div class="filter-tabs" id="categoryFilterTabs">
+            <button class="tab-btn active" data-cat="all">Tümü</button>
+            <button class="tab-btn" data-cat="military">Askeri</button>
+            <button class="tab-btn" data-cat="aviation">Havalimanı</button>
+            <button class="tab-btn" data-cat="maritime">Liman/Deniz</button>
+            <button class="tab-btn" data-cat="telecom">Telekom</button>
+            <button class="tab-btn" data-cat="government">Hükümet</button>
+            <button class="tab-btn" data-cat="municipality">Belediye</button>
+            <button class="tab-btn" data-cat="hospital">Hastane</button>
+          </div>
+        </div>
+        <div id="poiListContainer" class="poi-list"></div>
+      </div>
+    </aside>
+
+    <!-- ORTA PANEL: GOOGLE MAPS + CANLI SOKAK TRAFİĞİ VE TAM ŞEHİR MARKLAMA -->
+    <section class="map-Wrapper">
+      <div id="map"></div>
+
+      <!-- Harita Üstü Marklama ve Görünüm Filtre Çubuğu -->
+      <div class="map-top-filters">
+        <div class="map-style-switcher" id="mapStyleSwitcher">
+          <button type="button" class="style-btn active" data-style="google_traffic">🗺️ Google Maps + Canlı Trafik</button>
+          <button type="button" class="style-btn" data-style="google_hybrid">🛰️ Google Uydu + Trafik</button>
+          <button type="button" class="style-btn" data-style="google_standard">🏙️ Google Standart</button>
+          <button type="button" class="style-btn" data-style="dark_osint">🌑 Karanlık Mod</button>
+        </div>
+
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowPerimeters" checked />
+          <span>🛡️ Askeri, Hükümet &amp; Belediye Sınırları</span>
+        </label>
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowLojman" checked />
+          <span>🎖️ Açık Kaynak Lojman Markları</span>
+        </label>
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowVipStay" checked />
+          <span>🏨 VIP Konut / Konaklama</span>
+        </label>
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowAviation" checked />
+          <span>✈️ Havalimanı &amp; Uçuş (ADS-B)</span>
+        </label>
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowMaritime" checked />
+          <span>🚢 Gemi &amp; Liman Trafiği (AIS)</span>
+        </label>
+        <label class="mark-toggle">
+          <input type="checkbox" id="chkShowCorridors" checked />
+          <span>🛣️ Gerçek Yol Rotaları</span>
+        </label>
+      </div>
+
+      <!-- Harita Lejant Kutusu -->
+      <div class="map-legend">
+        <div class="legend-title">ÜLKE GENELİ STRATEJİK KATMANLAR</div>
+        <div class="legend-item">
+          <span class="dot dot-closure"></span> 🚧 Canlı Polis Yol Kapaması / VIP Konvoy
+        </div>
+        <div class="legend-item">
+          <span class="dot dot-critical"></span> 🛡️ Askeri Üs / 📡 Telekom &amp; Siber / 🏛️ Hükümet
+        </div>
+        <div class="legend-item">
+          <span class="dot" style="background:#8b5cf6;"></span> ✈️ Havalimanları &amp; 🛩️ Canlı Uçuş / VIP (ADS-B)
+        </div>
+        <div class="legend-item">
+          <span class="dot" style="background:#0ea5e9;"></span> ⚓ Limanlar &amp; 🚢 Canlı Gemi / Tanker (AIS) Trafiği
+        </div>
+        <div class="legend-item">
+          <span class="dot" style="background:#059669;"></span> 🏢 Belediye Başkanlığı / 🏥 Stratejik Hastane
+        </div>
+        <div class="legend-item">
+          <span class="dot dot-lojman"></span> 🎖️ Açık Kaynak Askeri &amp; Kamu Lojmanları
+        </div>
+        <div class="legend-item">
+          <span class="dot dot-vip"></span> 🏨 VIP Konut, Rezidans &amp; Diplomatik Konaklama
+        </div>
+        <div class="legend-item">
+          <span class="line-sample"></span> Zaman Kaymalı Konvoy / Personel Dalgası (&Delta;t dk)
+        </div>
+      </div>
+
+      <div id="mapPickBanner" class="map-pick-banner hidden">
+        Haritada canlı taramak istediğiniz herhangi bir şehre veya bölgeye tıklayın (Tüm askeri bölgeler, kurumlar, lojmanlar ve mahalleler otomatik keşfedilecek)
+        <button id="btnCancelPick">İptal</button>
+      </div>
+    </section>
+
+    <!-- SAĞ PANEL: CANLI ZAMAN SERİSİ GRAFİKLERİ & ŞEHİRDEKİ TÜM LOJMAN / MAHALLE LİSTESİ -->
+    <aside class="panel right-panel">
+      <!-- Grafik 1: 24 Saatlik Baz Çizgisi vs Canlı Yoğunluk -->
+      <div class="panel-section chart-box">
+        <div class="section-header">
+          <div>
+            <h2 id="selectedPoiTitle">📈 Kritik Nokta 24-Saatlik Baz vs. Canlı Yoğunluk</h2>
+            <p class="sub-hint" id="selectedPoiSubtitle">Günün Normal Baz Çizgisi vs. Şu Anki Canlı Yoğunluk (%)</p>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="poiBaselineChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Grafik 2: Zaman Kaymalı Lojman/Mahalle -> Kurum Dalgası -->
+      <div class="panel-section chart-box">
+        <div class="section-header">
+          <div>
+            <h2 id="selectedCorridorTitle">🌊 Lojman / Mahalle → Kurum Canlı Dalga Korelasyonu</h2>
+            <p class="sub-hint" id="selectedCorridorSubtitle">Kurumdaki hareketlilikten &Delta;t dk önce konut/lojman bölgesindeki çıkış dalgası</p>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="corridorWaveChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Şehirde Keşfedilen Tüm Lojman, VIP Konaklama ve Mahalleler -->
+      <div class="panel-section housing-section">
+        <div class="section-header">
+          <h2>🎖️ Şehirde Keşfedilen Lojmanlar, VIP &amp; Konut Bölgeleri</h2>
+          <button id="btnShowAllCorridors" class="btn-mini">Tüm Şehir</button>
+        </div>
+        <div id="housingListContainer" class="housing-list"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- CANLI API MODAL -->
+  <div id="apiModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙️ Canlı Sokak Telemetrisi (TomTom API) Ayarı</h3>
+        <button id="btnCloseModal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <p class="field-help">
+            Sistem varsayılan olarak <strong>OpenStreetMap (Overpass API)</strong> ile seçilen şehirdeki tüm askeri üsleri, devlet kurumlarını, hastaneleri, lojmanları ve mahalleleri canlı keşfeder; <strong>Google Maps Canlı Trafik Katmanı</strong> ve <strong>Çok Dilli Google News RSS</strong> ile birleştirir.
+          </p>
+        </div>
+
+        <div class="form-field">
+          <label for="tomtomKeyInput"><strong>TomTom Traffic Flow API Anahtarı (İsteğe Bağlı)</strong></label>
+          <input type="password" id="tomtomKeyInput" placeholder="TomTom API Key" />
+          <p class="field-help">
+            Ek olarak sokak bazlı resmi `roadClosure` ve hız telemetrisini doğrudan TomTom üzerinden de sorgulamak için anahtarınızı girebilirsiniz.
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnSaveApiSettings" class="btn-primary">Kaydet ve Canlı Tara</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
